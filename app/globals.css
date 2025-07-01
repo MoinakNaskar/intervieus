@@ -417,12 +417,12 @@
 
   /* When no sidebar is present (interview pages), take full width */
   .app-layout:not(:has(.sidebar-container)) .main-content {
-    @apply ml-0;
+    @apply ml-0 min-w-screen min-h-screen;
   }
 
   /* When sidebar is hidden, main content takes full width */
   .app-layout:has(.sidebar-hidden) .main-content {
-    @apply ml-0;
+    @apply ml-0 min-w-screen min-h-screen ;
   }
 
   /* Jobs Page Styles */

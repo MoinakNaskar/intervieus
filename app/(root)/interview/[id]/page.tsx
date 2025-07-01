@@ -21,7 +21,7 @@ const InterviewDetails = async ({ params }: RouteParams) => {
 
   const feedback = await getFeedbackByInterviewId({
     interviewId: id,
-    userId: user?.id!,
+    userId: user?._id!,
   });
 
   return (
@@ -49,11 +49,11 @@ const InterviewDetails = async ({ params }: RouteParams) => {
 
       <Agent
         userName={user?.name!}
-        userId={user?.id}
+        userId={user?._id}
         interviewId={id}
         type="interview"
         questions={interview.questions}
-        feedbackId={feedback?.id}
+        feedbackId={feedback?._id}
       />
     </>
   );

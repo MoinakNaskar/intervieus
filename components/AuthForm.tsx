@@ -17,48 +17,58 @@ import {
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 
-import { signIn, signUp } from "@/lib/actions/auth.action";
+import {  signInBackend, signUpBackend, } from "@/lib/actions/auth.action";
 import FormField from "./FormField";
 
-const authFormSchema = (type: FormType) => {
-  return z.object({
-    name: type === "sign-up" ? z.string().min(3) : z.string().optional(),
+
+const authFormSchema = {
+  'sign-up': z.object({
+    name: z.string(),
     email: z.string().email(),
     password: z.string().min(3),
-  });
-};
+    age: z.preprocess((val) => Number(val), z.number()),
+    gender: z.enum(["male", "female", "others"]),
+  }),
+  'sign-in': z.object({
+    email: z.string().email(),
+    password: z.string().min(3),
+  })
+} as const;
+
+type SignUpFormType = z.infer<typeof authFormSchema['sign-up']>;
+type SignInFormType = z.infer<typeof authFormSchema['sign-in']>;
 
 const AuthForm = ({ type }: { type: FormType }) => {
   const router = useRouter();
 
-  const formSchema = authFormSchema(type);
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-    },
+  const form = useForm<SignUpFormType | SignInFormType>({
+    resolver: zodResolver(authFormSchema[type]),
+    defaultValues: type === "sign-up"
+      ? { name: "", email: "", password: "", age: 0, gender: "male" }
+      : { email: "", password: "" },
   });
 
-  const onSubmit = async (data: z.infer<typeof formSchema>) => {
+  const onSubmit = async (data: any) => {
+    console.log("Submit called")
     try {
+
       if (type === "sign-up") {
-        const { name, email, password } = data;
+        const { name, email, password , age ,gender } = data;
+        console.log (data)
+        // const userCredential = await createUserWithEmailAndPassword(
+        //   auth,
+        //   email,
+        //   password
+        // );
 
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
-
-        const result = await signUp({
-          uid: userCredential.user.uid,
-          name: name!,
-          email,
-          password,
+        const result = await signUpBackend({
+          name: String(name),
+          age: String(age),
+          email: String(email),
+          password: String(password),
+          gender: String(gender)
         });
-
+        console.log(result)
         if (!result.success) {
           toast.error(result.message);
           return;
@@ -68,23 +78,12 @@ const AuthForm = ({ type }: { type: FormType }) => {
         router.push("/sign-in");
       } else {
         const { email, password } = data;
-
-        const userCredential = await signInWithEmailAndPassword(
-          auth,
+        console.log(data)
+        const response = await signInBackend({
           email,
-          password
-        );
-
-        const idToken = await userCredential.user.getIdToken();
-        if (!idToken) {
-          toast.error("Sign in Failed. Please try again.");
-          return;
-        }
-
-        await signIn({
-          email,
-          idToken,
+          password,
         });
+        console.log(response)
 
         toast.success("Signed in successfully.");
         router.push("/");
@@ -137,6 +136,30 @@ const AuthForm = ({ type }: { type: FormType }) => {
               placeholder="Enter your password"
               type="password"
             />
+
+            {!isSignIn && (
+              <FormField
+                control={form.control}
+                name="age"
+                label="Age"
+                placeholder="Your age"
+                type="number"
+              />
+            )}
+
+            {!isSignIn && (
+              <FormField
+                control={form.control}
+                name="gender"
+                label="Gender"
+                type="select"
+                options={[
+                  { label: "Male", value: "male" },
+                  { label: "Female", value: "female" },
+                  { label: "Others", value: "others" },
+                ]}
+              />
+            )}
 
             <Button className="btn" type="submit">
               {isSignIn ? "Sign In" : "Create an Account"}

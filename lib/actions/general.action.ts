@@ -2,124 +2,180 @@
 
 import { generateObject } from "ai";
 import { google } from "@ai-sdk/google";
+import { cookies } from "next/headers";
 
 import { db } from "@/firebase/admin";
 import { feedbackSchema } from "@/constants";
 
 export async function createFeedback(params: CreateFeedbackParams) {
-  const { interviewId, userId, transcript, feedbackId } = params;
+  const { interviewId, transcript } = params;
 
   try {
-    const formattedTranscript = transcript
-      .map(
-        (sentence: { role: string; content: string }) =>
-          `- ${sentence.role}: ${sentence.content}\n`
-      )
-      .join("");
-      console.log(formattedTranscript)
-    const { object } = await generateObject({
-      model: google("gemini-2.0-flash-001", {
-        structuredOutputs: false,
-      }),
-      schema: feedbackSchema,
-      prompt: `
-        You are an AI interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories. Be thorough and detailed in your analysis. Don't be lenient with the candidate. If there are mistakes or areas for improvement, point them out.
-        Transcript:
-        ${formattedTranscript}
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("accessToken")?.value;
+    if (!accessToken) throw new Error("No access token found");
 
-        Please score the candidate from 0 to 100 in the following areas. Do not add categories other than the ones provided:
-        - **Communication Skills**: Clarity, articulation, structured responses.
-        - **Technical Knowledge**: Understanding of key concepts for the role.
-        - **Problem-Solving**: Ability to analyze problems and propose solutions.
-        - **Cultural & Role Fit**: Alignment with company values and job role.
-        - **Confidence & Clarity**: Confidence in responses, engagement, and clarity.
-        `,
-      system:
-        "You are a professional interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories",
+    const response = await fetch("http://localhost:9000/api/v1/interview/generate-feedback", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        interviewId,
+        transcript,
+      }),
+      credentials: "include",
     });
 
-    const feedback = {
-      interviewId: interviewId,
-      userId: userId,
-      totalScore: object.totalScore,
-      categoryScores: object.categoryScores,
-      strengths: object.strengths,
-      areasForImprovement: object.areasForImprovement,
-      finalAssessment: object.finalAssessment,
-      createdAt: new Date().toISOString(),
-    };
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await response.json();
 
-    let feedbackRef;
-
-    if (feedbackId) {
-      feedbackRef = db.collection("feedback").doc(feedbackId);
+      console.log(data)
+      if (!data) throw new Error("No feedback data received");
+     
+      return data as Feedback;
     } else {
-      feedbackRef = db.collection("feedback").doc();
+      const text = await response.text();
+      console.error("Non-JSON response:", text);
+      throw new Error("Error Occurred");
     }
-
-    await feedbackRef.set(feedback);
-
-    return { success: true, feedbackId: feedbackRef.id };
   } catch (error) {
-    console.error("Error saving feedback:", error);
-    return { success: false };
+    console.error("Error in createFeedback:", error);
+    throw new Error(String(error));
   }
 }
 
 export async function getInterviewById(id: string): Promise<Interview | null> {
-  const interview = await db.collection("interviews").doc(id).get();
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("accessToken")?.value;
+    if (!accessToken) return null;
 
-  return interview.data() as Interview | null;
+    const response = await fetch(`http://localhost:9000/api/v1/user/get-interview/${id}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      credentials: "include",
+    });
+
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await response.json();
+      if (!data.data) return null;
+      return data.data as Interview;
+    } else {
+      const text = await response.text();
+      console.error("Non-JSON response:", text);
+      throw new Error("Error Occurred");
+    }
+  } catch (error) {
+    console.error("Error in getInterviewById:", error);
+    throw new Error(String(error));
+  }
 }
 
 export async function getFeedbackByInterviewId(
   params: GetFeedbackByInterviewIdParams
 ): Promise<Feedback | null> {
-  const { interviewId, userId } = params;
+  const { interviewId } = params;
+  
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("accessToken")?.value;
+    if (!accessToken) return null;
 
-  const querySnapshot = await db
-    .collection("feedback")
-    .where("interviewId", "==", interviewId)
-    .where("userId", "==", userId)
-    .limit(1)
-    .get();
+    const response = await fetch(`http://localhost:9000/api/v1/user/get-feedback/${interviewId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      credentials: "include",
+    });
 
-  if (querySnapshot.empty) return null;
-
-  const feedbackDoc = querySnapshot.docs[0];
-  return { id: feedbackDoc.id, ...feedbackDoc.data() } as Feedback;
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await response.json();
+      if (!data.data) return null;
+      console.log(data.data[0])
+      return data.data[0] as Feedback;
+    } else {
+      const text = await response.text();
+      console.error("Non-JSON response:", text);
+      throw new Error("Error Occurred");
+    }
+  } catch (error) {
+    console.error("Error in getFeedbackByInterviewId:", error);
+    throw new Error(String(error));
+  }
 }
 
-export async function getLatestInterviews(
-  params: GetLatestInterviewsParams
-): Promise<Interview[] | null> {
-  const { userId, limit = 20 } = params;
+export async function getLatestInterviews(): Promise<Interview[] | null> {
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("accessToken")?.value;
+    if (!accessToken) return null;
 
-  const interviews = await db
-    .collection("interviews")
-    .orderBy("createdAt", "desc")
-    .where("finalized", "==", true)
-    .where("userId", "!=", userId)
-    .limit(limit)
-    .get();
+    const response = await fetch("http://localhost:9000/api/v1/user/get-latest-interviews", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      credentials: "include",
+    });
 
-  return interviews.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Interview[];
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await response.json();
+      if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+        return null;
+      }
+      return data.data as Interview[];
+    } else {
+      const text = await response.text();
+      console.error("Non-JSON response:", text);
+      throw new Error("Error Occurred");
+    }
+  } catch (error) {
+    console.error("Error in getLatestInterviews:", error);
+    throw new Error(String(error));
+  }
 }
 
-export async function getInterviewsByUserId(
-  userId: string
-): Promise<Interview[] | null> {
-  const interviews = await db
-    .collection("interviews")
-    .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
-    .get();
+export async function getMyInterviews(): Promise<Interview[] | null> {
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("accessToken")?.value;
+    if (!accessToken) return null;
 
-  return interviews.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Interview[];
+    const response = await fetch("http://localhost:9000/api/v1/user/get-my-interviews", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      credentials: "include",
+    });
+
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await response.json();
+      if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+        return null;
+      }
+      return data.data as Interview[];
+    } else {
+      const text = await response.text();
+      console.error("Non-JSON response:", text);
+      throw new Error("Error Occurred");
+    }
+  } catch (error) {
+    console.error("Error in getMyInterviews:", error);
+    throw new Error(String(error));
+  }
 }

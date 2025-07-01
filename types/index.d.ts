@@ -1,7 +1,8 @@
 interface Feedback {
-  id: string;
-  interviewId: string;
+  _id: string;
+  interview: string;
   totalScore: number;
+  user:string
   categoryScores: Array<{
     name: string;
     score: number;
@@ -14,7 +15,7 @@ interface Feedback {
 }
 
 interface Interview {
-  id: string;
+  _id: string;
   role: string;
   level: string;
   questions: string[];
@@ -35,7 +36,9 @@ interface CreateFeedbackParams {
 interface User {
   name: string;
   email: string;
-  id: string;
+  _id: string;
+  gender: "male"|"female"|"others",
+  age:number
 }
 
 interface InterviewCardProps {

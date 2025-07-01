@@ -6,16 +6,16 @@ import InterviewCard from "@/components/InterviewCard";
 
 import { getCurrentUser } from "@/lib/actions/auth.action";
 import {
-  getInterviewsByUserId,
   getLatestInterviews,
+  getMyInterviews,
 } from "@/lib/actions/general.action";
 
 async function Home() {
   const user = await getCurrentUser();
 
   const [userInterviews, allInterview] = await Promise.all([
-    getInterviewsByUserId(user?.id!),
-    getLatestInterviews({ userId: user?.id! }),
+    getMyInterviews(),
+    getLatestInterviews(),
   ]);
 
   const hasPastInterviews = userInterviews?.length! > 0;
@@ -51,9 +51,9 @@ async function Home() {
           {hasPastInterviews ? (
             userInterviews?.map((interview) => (
               <InterviewCard
-                key={interview.id}
-                userId={user?.id}
-                interviewId={interview.id}
+                key={interview._id}
+                userId={user?._id}
+                interviewId={interview._id}
                 role={interview.role}
                 type={interview.type}
                 techstack={interview.techstack}
@@ -73,9 +73,9 @@ async function Home() {
           {hasUpcomingInterviews ? (
             allInterview?.map((interview) => (
               <InterviewCard
-                key={interview.id}
-                userId={user?.id}
-                interviewId={interview.id}
+                key={interview._id}
+                userId={user?._id}
+                interviewId={interview._id}
                 role={interview.role}
                 type={interview.type}
                 techstack={interview.techstack}
